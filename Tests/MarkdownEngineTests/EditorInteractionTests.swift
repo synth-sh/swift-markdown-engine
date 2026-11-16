@@ -5,6 +5,10 @@ import Testing
 
 @MainActor
 struct EditorInteractionTests {
+    init() {
+        _ = NSApplication.shared
+    }
+
     @Test func keyHookCanConsumeReturn() throws {
         let view = NativeTextView(frame: .zero)
         view.string = "Draft"

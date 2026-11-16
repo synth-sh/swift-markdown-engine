@@ -119,11 +119,12 @@ extension NativeTextView {
             }
             return true
         case .handOff:
-            guard drop.files.isPending else {
-                fileDrop?.handOff(drop.files.urls)
-                return true
+            guard let handOff = fileDrop?.handOff else { return false }
+            if drop.files.isPending {
+                drop.files.write(from: sender.draggingPasteboard, then: handOff)
+            } else {
+                handOff(drop.files.urls)
             }
-            drop.files.write(from: sender.draggingPasteboard) { [weak self] urls in self?.fileDrop?.handOff(urls) }
             return true
         case .refuse:
             return false
