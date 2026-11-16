@@ -465,6 +465,9 @@ public struct NativeTextViewWrapper: NSViewRepresentable {
         reconcileHeader(textView: textView, context: context)
 
         let isNodeSwitch = context.coordinator.documentId != documentId
+        if !isNodeSwitch {
+            context.coordinator.rebind(text: $text, isWikiLinkActive: $isWikiLinkActive)
+        }
         context.coordinator.dropStaleScrollRestore()
 
         // Refreshed here, not with the other callbacks at the bottom — teardown has
@@ -704,6 +707,7 @@ public struct NativeTextViewWrapper: NSViewRepresentable {
             context.coordinator.noteUndoBaseline(for: context.coordinator.documentId, text: textView.string)
             context.coordinator.noteSelection(for: context.coordinator.documentId, in: textView)
             context.coordinator.documentId = documentId
+            context.coordinator.rebind(text: $text, isWikiLinkActive: $isWikiLinkActive)
             context.coordinator.retainUndo(for: documentId)
             context.coordinator.armScrollRestore(for: documentId)
             // A stack gone stale while switched away is not judged here: this pass

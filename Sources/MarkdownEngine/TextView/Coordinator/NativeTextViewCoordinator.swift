@@ -91,8 +91,7 @@ public final class NativeTextViewCoordinator: NSObject, NSTextViewDelegate {
         return left.range
     }
 
-    /// A parked editor comes back under a new SwiftUI view: its bindings still
-    /// belong to the view that was removed, and text written there is lost.
+    /// A reused coordinator can outlive the bindings of the document it first displayed.
     func rebind(text: Binding<String>, isWikiLinkActive: Binding<Bool>) {
         _text = text
         _isWikiLinkActive = isWikiLinkActive
