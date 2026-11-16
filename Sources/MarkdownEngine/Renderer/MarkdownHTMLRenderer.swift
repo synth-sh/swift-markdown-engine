@@ -350,7 +350,8 @@ public enum MarkdownHTMLRenderer {
         for match in matches {
             guard let url = match.url else { continue }
             let label = ns.substring(with: match.range)
-            let href = label.lowercased().hasPrefix("www.") ? "https://\(label)" : url.absoluteString
+            let bareWebAddress = url.scheme == "http" && label.lowercased().hasPrefix("www.")
+            let href = bareWebAddress ? "https://\(label)" : url.absoluteString
             out += escape(ns.substring(with: NSRange(location: cursor, length: match.range.location - cursor)))
             out += "<a href=\"\(escape(href))\">\(escape(label))</a>"
             cursor = NSMaxRange(match.range)
