@@ -93,6 +93,7 @@ public struct NativeTextViewWrapper: NSViewRepresentable {
     /// Files dragged onto the text. Without it the text view keeps AppKit's own
     /// drag handling. See `EditorFileDrop`.
     public var fileDrop: EditorFileDrop?
+    public var interaction: EditorInteraction
 
     /// Fires when the user clicks a `[[Name]]` link. The argument is the
     /// resolved opaque identifier (or the display name when no resolver
@@ -180,6 +181,7 @@ public struct NativeTextViewWrapper: NSViewRepresentable {
         isFocused: Binding<Bool>? = nil,
         onPasteImage: ((NSPasteboard) -> String?)? = nil,
         fileDrop: EditorFileDrop? = nil,
+        interaction: EditorInteraction = .init(),
         onLinkClick: ((String) -> Void)? = nil,
         onCaretRectChange: ((CGRect) -> Void)? = nil,
         onTextMutation: ((MarkdownTextMutation) -> Void)? = nil,
@@ -211,6 +213,7 @@ public struct NativeTextViewWrapper: NSViewRepresentable {
         self.isFocused = isFocused
         self.onPasteImage = onPasteImage
         self.fileDrop = fileDrop
+        self.interaction = interaction
         self.onLinkClick = onLinkClick
         self.onCaretRectChange = onCaretRectChange
         self.onTextMutation = onTextMutation
@@ -337,6 +340,7 @@ public struct NativeTextViewWrapper: NSViewRepresentable {
         textView.isAutomaticDataDetectionEnabled = true
         textView.isAutomaticDashSubstitutionEnabled = false
         textView.onPasteImage = onPasteImage
+        textView.interaction = interaction
         textView.fileDrop = fileDrop
         if #available(macOS 15.1, *) {
             // Inline: rewrites morph in place. On 15.1–26 the text below a rewrite dims
@@ -397,7 +401,9 @@ public struct NativeTextViewWrapper: NSViewRepresentable {
         }
         scrollView.contentView.postsBoundsChangedNotifications = true
         var lastObservedViewportWidth = scrollView.contentView.bounds.width
-        NotificationCenter.default.addObserver(forName: NSView.frameDidChangeNotification, object: scrollView.contentView, queue: nil) { _ in
+        let frameObserver = NotificationCenter.default.addObserver(forName: NSView.frameDidChangeNotification, object: scrollView.contentView, queue: nil) {
+            [weak textView, weak scrollView, weak coordinator = context.coordinator] _ in
+            guard let textView, let scrollView, let coordinator else { return }
             // Refresh code-block overlays only on real viewport width changes, not on TextKit height-only echoes during typing.
             let newWidth = scrollView.contentView.bounds.width
             if abs(newWidth - lastObservedViewportWidth) > 0.5 {
@@ -409,8 +415,9 @@ public struct NativeTextViewWrapper: NSViewRepresentable {
                 if textView.configuration.readingWidth != nil {
                     textView.centerReadingColumn(forClipWidth: newWidth)
                 }
-                context.coordinator.didEnsureLayoutForCurrentDocument = false
-                context.coordinator.updateCodeBlockSelection(textView: textView)
+                coordinator.didEnsureLayoutForCurrentDocument = false
+                coordinator.updateCodeBlockSelection(textView: textView)
+                coordinator.reportHostSelection(in: textView)
             }
             // Only react with overscroll recalc when the viewport itself resizes
             // (window resize). Without this guard, TextKit-induced frame changes echo
@@ -435,15 +442,18 @@ public struct NativeTextViewWrapper: NSViewRepresentable {
             textView.recalcOverscroll(for: scrollView)
             scrollView.clampToInsets()
         }
-        NotificationCenter.default.addObserver(forName: NSView.boundsDidChangeNotification, object: scrollView.contentView, queue: nil) { _ in
+        let boundsObserver = NotificationCenter.default.addObserver(forName: NSView.boundsDidChangeNotification, object: scrollView.contentView, queue: nil) {
+            [weak textView, weak scrollView, weak coordinator = context.coordinator] _ in
+            guard let textView, let scrollView, let coordinator else { return }
             textView.ensureVisibleLayout()
-            if context.coordinator.isWritingToolsActive {
-                context.coordinator.fixWritingToolsChildWindowIfNeeded(textView: textView)
+            if coordinator.isWritingToolsActive {
+                coordinator.fixWritingToolsChildWindowIfNeeded(textView: textView)
             }
             scrollView.clampToInsets()
-            context.coordinator.refreshActiveLinkCaretRect()
-            context.coordinator.updateCodeBlockSelection(textView: textView)
+            coordinator.refreshActiveLinkCaretRect()
+            coordinator.updateCodeBlockSelection(textView: textView)
         }
+        context.coordinator.viewportObservers = [frameObserver, boundsObserver]
         reconcileHeader(textView: textView, context: context)
         return scrollView
     }
@@ -515,6 +525,7 @@ public struct NativeTextViewWrapper: NSViewRepresentable {
         }
 
         textView.onPasteImage = onPasteImage
+        textView.interaction = interaction
         textView.fileDrop = fileDrop
         textView.isCursorExcluded = isCursorExcluded
         textView.setPlaceholder(placeholder)
@@ -604,7 +615,13 @@ public struct NativeTextViewWrapper: NSViewRepresentable {
         let newWikiFingerprint = configuration.services.wikiLinks.fingerprint()
         let imageChanged = newImageFingerprint != context.coordinator.lastImageFingerprint
         let wikiChanged = newWikiFingerprint != context.coordinator.lastWikiFingerprint
-        if imageChanged || wikiChanged {
+        let themeChanged = context.coordinator.configuration.theme != configuration.theme
+        if themeChanged {
+            context.coordinator.configuration.theme = configuration.theme
+            textView.configuration.theme = configuration.theme
+            context.coordinator.resolvedCaretColor = nil
+        }
+        if imageChanged || wikiChanged || themeChanged {
             context.coordinator.lastImageFingerprint = newImageFingerprint
             context.coordinator.lastWikiFingerprint = newWikiFingerprint
             context.coordinator.configuration.services = configuration.services
@@ -799,6 +816,7 @@ public struct NativeTextViewWrapper: NSViewRepresentable {
         context.coordinator.onDirectiveCompletion = onDirectiveCompletion
         context.coordinator.onCodeBlockSelectionChange = onCodeBlockSelectionChange
         context.coordinator.didInitialFormatting = true
+        context.coordinator.reportHostSelection(in: textView)
     }
 
     public func makeCoordinator() -> Coordinator {

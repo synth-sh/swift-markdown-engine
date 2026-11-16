@@ -566,9 +566,19 @@ public final class NativeTextViewCoordinator: NSObject, NSTextViewDelegate {
     //   - +Autocorrect     — spell/grammar/quote toggles
     //   - +WritingTools    — macOS 15+ Writing Tools session
 
+    var viewportObservers: [any NSObjectProtocol] = []
+
+    func reportHostSelection(in textView: NSTextView) {
+        guard let report = (textView as? NativeTextView)?.interaction.selection,
+              !textView.hasMarkedText() else { return }
+        let code = parsedDocument(for: textView.string).codeTokens
+        report(textView, MarkdownDetection.isInsideCodeBlock(range: textView.selectedRange(), codeTokens: code))
+    }
+
     deinit {
         NotificationCenter.default.removeObserver(self)
         busObservers.forEach(NotificationCenter.default.removeObserver(_:))
+        viewportObservers.forEach(NotificationCenter.default.removeObserver(_:))
     }
 }
 

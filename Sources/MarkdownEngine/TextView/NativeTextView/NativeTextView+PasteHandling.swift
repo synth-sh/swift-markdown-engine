@@ -20,6 +20,7 @@ extension NativeTextView {
         }
 
         let pasteboard = NSPasteboard.general
+        if interaction.paste?(self, pasteboard) == true { return }
 
         if let imageEmbed = onPasteImage?(pasteboard), !imageEmbed.isEmpty {
             insertBlockEmbed(imageEmbed)
