@@ -6,6 +6,7 @@ public struct EditorInteraction {
     public var key: ((NSTextView, NSEvent) -> Bool)?
     public var paste: ((NSTextView, NSPasteboard) -> Bool)?
     /// Reports the native selection and whether its caret is in inline or fenced code.
+    /// Coalesced on the main queue after editing and view updates settle.
     public var selection: ((NSTextView, Bool) -> Void)?
     public var openURL: ((URL) -> Bool)?
 

@@ -445,11 +445,7 @@ extension NativeTextViewCoordinator {
         // pass so it can reuse it instead of walking the document's tokens
         // again, and assigned only on a CHANGE (this fires on every keystroke).
         // Cached for updateNSView, which has no tokens to hand.
-        let caretInk = caretColor(at: selRange.location, tokens: tokens, active: activeTokenIndices)
-        if caretInk != resolvedCaretColor {
-            resolvedCaretColor = caretInk
-            if tv.isEditable { tv.insertionPointColor = caretInk }
-        }
+        updateCaretColor(in: tv, at: selRange.location, tokens: tokens)
 
         // Snap-back: when the caret LEFT a wiki/image token, re-sync its displayed name to the live target name.
         if selRange.length == 0,

@@ -59,6 +59,56 @@ struct DocumentSwitchTests {
         }
     }
 
+    private final class Appearance: ObservableObject {
+        @Published var theme = MarkdownEditorTheme(bodyText: .black, mutedText: .white)
+    }
+
+    private struct AppearanceHost: View {
+        @ObservedObject var appearance: Appearance
+        var source: String
+        var raw: Bool
+
+        var body: some View {
+            var config = MarkdownEditorConfiguration.default
+            config.theme = appearance.theme
+            config.rawSourceMode = raw
+            config.cursorFollowsSpanInk = true
+            config.extensions = [InvertingHighlight()]
+            return NativeTextViewWrapper(text: .constant(source), configuration: config)
+        }
+    }
+
+    private struct InvertingHighlight: MarkdownExtension {
+        var id: String { HighlightExtension.identifier }
+        var inline: InlineSyntax? { InlineSyntax(open: "==", close: "==") }
+
+        func contentAttributes(theme: MarkdownEditorTheme) -> [NSAttributedString.Key: Any] {
+            [.backgroundColor: theme.bodyText, .foregroundColor: theme.mutedText]
+        }
+
+        func html(childrenHTML: String) -> String { "<mark>\(childrenHTML)</mark>" }
+    }
+
+    @Test(arguments: [false, true])
+    func themeUpdateRefreshesTextAndCaretWithoutMovingSelection(raw: Bool) async throws {
+        let source = "plain ==marked== tail"
+        let appearance = Appearance()
+        let (view, _) = try await Self.stage(AppearanceHost(appearance: appearance, source: source, raw: raw))
+        let caret = NSRange(location: 11, length: 0)
+        view.setSelectedRange(caret)
+        #expect(view.insertionPointColor == (raw ? NSColor.black : NSColor.white))
+
+        appearance.theme = MarkdownEditorTheme(bodyText: .white, mutedText: .black)
+        await Self.spin(0.15)
+
+        let storage = try #require(view.textStorage)
+        #expect(storage.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? NSColor == .white)
+        #expect(view.typingAttributes[.foregroundColor] as? NSColor == .white)
+        #expect(view.insertionPointColor == (raw ? NSColor.white : NSColor.black))
+        #expect(view.string == source)
+        #expect(view.selectedRange() == caret)
+    }
+
     /// AppKit can still be working on a window after the test returns; keep them alive.
     private static var windows: [NSWindow] = []
 

@@ -634,8 +634,10 @@ public struct NativeTextViewWrapper: NSViewRepresentable {
                 tlm.invalidateLayout(for: tlm.documentRange)
             }
             // Restyle live tv content — full rebuild would clobber paste-fresh embeds when `text` binding hasn't caught up.
-            let fullRange = NSRange(location: 0, length: (textView.string as NSString).length)
-            if fullRange.length > 0 {
+            if context.coordinator.configuration.rawSourceMode {
+                if themeChanged { context.coordinator.refreshRawSourceForeground(in: textView) }
+            } else {
+                let fullRange = NSRange(location: 0, length: (textView.string as NSString).length)
                 context.coordinator.restyleParagraphs([fullRange], in: textView)
             }
         }
@@ -820,7 +822,6 @@ public struct NativeTextViewWrapper: NSViewRepresentable {
         context.coordinator.onDirectiveCompletion = onDirectiveCompletion
         context.coordinator.onCodeBlockSelectionChange = onCodeBlockSelectionChange
         context.coordinator.didInitialFormatting = true
-        context.coordinator.reportHostSelection(in: textView)
     }
 
     public func makeCoordinator() -> Coordinator {
@@ -870,6 +871,7 @@ public struct NativeTextViewWrapper: NSViewRepresentable {
     /// different screen — and that is the only moment left to record where the
     /// reader was; the coordinator's own offsets die with it.
     public static func dismantleNSView(_ nsView: NSScrollView, coordinator: Coordinator) {
+        nsView.nativeTextView?.interaction.selection = nil
         // A restore still pending means the reader was never put back where they
         // were — recording the current offset would overwrite the good one with
         // the mid-load position.

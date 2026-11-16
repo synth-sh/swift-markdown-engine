@@ -163,15 +163,20 @@ extension MarkdownTokenizer {
         }
         blockTokenLock.unlock()
 
-        let blockLevel = BlockLevelTokenizer.tokens(for: kind, in: sub as NSString, registry: registry)
+        let ns = sub as NSString
+        let blockLevel = BlockLevelTokenizer.tokens(for: kind, in: ns, registry: registry)
         // Fenced code is opaque — no inline markup inside it. Extension blocks
         // parse inlines over their CONTENT only (the fence lines are syntax —
         // a `$x$` in the info string must not become a latex token).
         let inline: [MarkdownToken]
         if kind == .fencedCode {
             inline = []
+        } else if kind == .list {
+            let range = NSRange(location: 0, length: ns.length)
+            inline = DocumentAST.listItems(range, ns, registry: registry).flatMap {
+                InlineASTAdapter.tokens(from: $0.inlines)
+            }
         } else if case .ext = kind, let block = blockLevel.first {
-            let ns = sub as NSString
             let content = block.contentRange
             inline = content.length > 0
                 ? InlineASTAdapter.tokens(from: InlineParser.parse(ns, range: content, registry: registry))

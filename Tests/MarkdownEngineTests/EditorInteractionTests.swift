@@ -28,7 +28,7 @@ struct EditorInteractionTests {
         #expect(view.string == "Draft")
     }
 
-    @Test func hostCanHandleReadOnlyLinksAndIdentifyCodeSelection() throws {
+    @Test func hostCanHandleReadOnlyLinksAndIdentifyCodeSelection() async throws {
         let coordinator = NativeTextViewWrapper(text: .constant("")).makeCoordinator()
         let view = NativeTextView(frame: .zero)
         view.isEditable = false
@@ -42,8 +42,41 @@ struct EditorInteractionTests {
         coordinator.reportHostSelection(in: view)
         let url = try #require(URL(string: "demo://example"))
         #expect(coordinator.textView(view, clickedOnLink: url, at: 0))
+        #expect(!reportedCode)
+        await flushSelectionReports()
         #expect(reportedCode)
         #expect(opened == url)
+    }
+
+    @Test func hostSelectionIsCoalescedAfterDocumentRebuild() async {
+        let source = "A `code` span"
+        let coordinator = NativeTextViewWrapper(text: .constant(source)).makeCoordinator()
+        let view = NativeTextView(frame: .zero)
+        view.delegate = coordinator
+        var ranges: [NSRange] = []
+        var codeFlags: [Bool] = []
+        view.interaction.selection = { view, inCode in
+            ranges.append(view.selectedRange())
+            codeFlags.append(inCode)
+        }
+        let caret = NSRange(location: 4, length: 0)
+        coordinator.rebuildTextStorageAndStyle(view, from: source, restoring: caret)
+        #expect(ranges.isEmpty)
+        await flushSelectionReports()
+        #expect(ranges == [caret])
+        #expect(codeFlags == [true])
+    }
+
+    @Test func backticksInSeparateListItemsDoNotFormCode() {
+        let source = "- `a\n- b`\n- 🐈 `c`"
+        let expected = (source as NSString).range(of: "`c`")
+        #expect(MarkdownSource.codeRanges(in: source) == [expected])
+    }
+
+    private func flushSelectionReports() async {
+        await withCheckedContinuation { continuation in
+            DispatchQueue.main.async { continuation.resume() }
+        }
     }
 }
 

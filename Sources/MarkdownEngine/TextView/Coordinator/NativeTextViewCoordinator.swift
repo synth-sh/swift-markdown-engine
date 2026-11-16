@@ -566,12 +566,22 @@ public final class NativeTextViewCoordinator: NSObject, NSTextViewDelegate {
     //   - +WritingTools    — macOS 15+ Writing Tools session
 
     var viewportObservers: [any NSObjectProtocol] = []
+    private var hostSelectionPending = false
 
     func reportHostSelection(in textView: NSTextView) {
-        guard let report = (textView as? NativeTextView)?.interaction.selection,
+        guard !hostSelectionPending, !isRebuildingDocument,
+              let textView = textView as? NativeTextView, textView.interaction.selection != nil,
               !textView.hasMarkedText() else { return }
-        let code = parsedDocument(for: textView.string).codeTokens
-        report(textView, MarkdownDetection.isInsideCodeBlock(range: textView.selectedRange(), codeTokens: code))
+        hostSelectionPending = true
+        DispatchQueue.main.async { [weak self, weak textView] in
+            guard let self else { return }
+            self.hostSelectionPending = false
+            guard let textView, textView.delegate === self,
+                  !self.isRebuildingDocument, self.deferredNodeSwitch == nil,
+                  !textView.hasMarkedText(), let report = textView.interaction.selection else { return }
+            let code = self.parsedDocument(for: textView.string).codeTokens
+            report(textView, MarkdownDetection.isInsideCodeBlock(range: textView.selectedRange(), codeTokens: code))
+        }
     }
 
     deinit {
