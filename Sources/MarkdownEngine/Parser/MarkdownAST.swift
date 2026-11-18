@@ -171,11 +171,9 @@ enum DocumentAST {
         case .blockquote:
             return .blockquote(range: block.range, inlines: scoped ? InlineParser.parse(ns, range: block.range, registry: registry) : [])
         case .list:
-            return list(
-                block.range,
-                ns,
-                scopedRanges: scopedRanges,
-                registry: registry
+            return .list(
+                range: block.range,
+                items: listItems(block.range, ns, scopedRanges: scopedRanges, registry: registry)
             )
         case .fencedCode:
             return .codeBlock(range: block.range)
@@ -253,12 +251,12 @@ enum DocumentAST {
 
     /// Split a list block into physical items. Scoped passes derive their lines
     /// directly from the normalized scopes instead of walking the whole block.
-    private static func list(
+    static func listItems(
         _ range: NSRange,
         _ ns: NSString,
         scopedRanges: [NSRange]? = nil,
         registry: ExtensionRegistry = .empty
-    ) -> BlockNode {
+    ) -> [ListItem] {
         let lineRanges: [NSRange]
         if let scopedRanges {
             var selected: [NSRange] = []
@@ -308,7 +306,7 @@ enum DocumentAST {
                 listItem(line, ns, scoped: true, registry: registry)
             )
         }
-        return .list(range: range, items: items)
+        return items
     }
 
     /// Parse one list-item line: indent, marker, optional task checkbox, inline content.

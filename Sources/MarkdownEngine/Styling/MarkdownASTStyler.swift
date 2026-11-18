@@ -908,7 +908,9 @@ enum MarkdownASTStyler {
     ) {
         attrs.append((range, [.spellingState: 0]))
         var urlString = ctx.ns.substring(with: urlRange)
-        if !urlString.contains("://") { urlString = "https://\(urlString)" }
+        if !urlString.contains("://"), !urlString.lowercased().hasPrefix("mailto:") {
+            urlString = "https://\(urlString)"
+        }
         let isActive = ctx.isActive(range)
         if let url = URL(string: urlString) {
             if isActive {

@@ -16,6 +16,13 @@ import Foundation
 
 extension NativeTextViewCoordinator {
 
+    func updateCaretColor(in textView: NSTextView, at location: Int, tokens: [MarkdownToken]) {
+        let ink = caretColor(at: location, tokens: tokens, active: activeTokenIndices)
+        guard ink != resolvedCaretColor else { return }
+        resolvedCaretColor = ink
+        if textView.isEditable { textView.insertionPointColor = ink }
+    }
+
     /// Foreground an extension paints at `location`, or `theme.bodyText`.
     /// Only the CONTENT counts — on the `==` markers the background is the page
     /// again, so the caret belongs back at the body color.

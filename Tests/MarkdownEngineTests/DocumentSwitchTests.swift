@@ -39,6 +39,76 @@ struct DocumentSwitchTests {
         }
     }
 
+    private final class Drafts: ObservableObject {
+        @Published var selected = "C"
+        @Published var text = ["A": "First draft", "B": "Second draft", "C": "Third draft"]
+    }
+
+    private struct DraftHost: View {
+        @ObservedObject var drafts: Drafts
+
+        var body: some View {
+            let selected = drafts.selected
+            NativeTextViewWrapper(
+                text: Binding(
+                    get: { drafts.text[selected] ?? "" },
+                    set: { drafts.text[selected] = $0 }
+                ),
+                documentId: selected
+            )
+        }
+    }
+
+    private final class Appearance: ObservableObject {
+        @Published var theme = MarkdownEditorTheme(bodyText: .black, mutedText: .white)
+    }
+
+    private struct AppearanceHost: View {
+        @ObservedObject var appearance: Appearance
+        var source: String
+        var raw: Bool
+
+        var body: some View {
+            var config = MarkdownEditorConfiguration.default
+            config.theme = appearance.theme
+            config.rawSourceMode = raw
+            config.cursorFollowsSpanInk = true
+            config.extensions = [InvertingHighlight()]
+            return NativeTextViewWrapper(text: .constant(source), configuration: config)
+        }
+    }
+
+    private struct InvertingHighlight: MarkdownExtension {
+        var id: String { HighlightExtension.identifier }
+        var inline: InlineSyntax? { InlineSyntax(open: "==", close: "==") }
+
+        func contentAttributes(theme: MarkdownEditorTheme) -> [NSAttributedString.Key: Any] {
+            [.backgroundColor: theme.bodyText, .foregroundColor: theme.mutedText]
+        }
+
+        func html(childrenHTML: String) -> String { "<mark>\(childrenHTML)</mark>" }
+    }
+
+    @Test(arguments: [false, true])
+    func themeUpdateRefreshesTextAndCaretWithoutMovingSelection(raw: Bool) async throws {
+        let source = "plain ==marked== tail"
+        let appearance = Appearance()
+        let (view, _) = try await Self.stage(AppearanceHost(appearance: appearance, source: source, raw: raw))
+        let caret = NSRange(location: 11, length: 0)
+        view.setSelectedRange(caret)
+        #expect(view.insertionPointColor == (raw ? NSColor.black : NSColor.white))
+
+        appearance.theme = MarkdownEditorTheme(bodyText: .white, mutedText: .black)
+        await Self.spin(0.15)
+
+        let storage = try #require(view.textStorage)
+        #expect(storage.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? NSColor == .white)
+        #expect(view.typingAttributes[.foregroundColor] as? NSColor == .white)
+        #expect(view.insertionPointColor == (raw ? NSColor.white : NSColor.black))
+        #expect(view.string == source)
+        #expect(view.selectedRange() == caret)
+    }
+
     /// AppKit can still be working on a window after the test returns; keep them alive.
     private static var windows: [NSWindow] = []
 
@@ -60,19 +130,45 @@ struct DocumentSwitchTests {
     }
 
     private static func stage(_ document: Document) async throws -> (NativeTextView, NativeTextViewCoordinator) {
+        try await stage(Host(document: document))
+    }
+
+    private static func stage(_ host: some View) async throws -> (NativeTextView, NativeTextViewCoordinator) {
         _ = NSApplication.shared
         let window = NSWindow(
             contentRect: NSRect(x: -30000, y: -30000, width: 900, height: 600),
             styleMask: [.borderless], backing: .buffered, defer: false
         )
         window.isReleasedWhenClosed = false
-        window.contentView = NSHostingView(rootView: Host(document: document))
+        window.contentView = NSHostingView(rootView: host)
         window.orderFrontRegardless()
         windows.append(window)
         await spin(0.4)
         let tv = try #require(findTextView(window.contentView!))
         let coordinator = try #require(tv.delegate as? NativeTextViewCoordinator)
         return (tv, coordinator)
+    }
+
+    @Test("typing after a switch updates only the selected draft")
+    func editsFollowTheSelectedDraft() async throws {
+        let drafts = Drafts()
+        var expected = drafts.text
+        let (tv, coordinator) = try await Self.stage(DraftHost(drafts: drafts))
+
+        for (id, suffix) in [("A", " alpha"), ("B", " beta"), ("C", " gamma"), ("A", " again")] {
+            drafts.selected = id
+            await Self.spin(0.2)
+            try #require(coordinator.documentId == id)
+            #expect(tv.string == expected[id])
+
+            for character in suffix {
+                tv.insertText(String(character), replacementRange: NSRange(location: tv.string.utf16.count, length: 0))
+                await Self.spin(0.02)
+            }
+            expected[id, default: ""] += suffix
+            #expect(tv.string == expected[id])
+            #expect(drafts.text == expected)
+        }
     }
 
     @Test("switching between two empty documents completes", arguments: ["", "Same words in both notes."])

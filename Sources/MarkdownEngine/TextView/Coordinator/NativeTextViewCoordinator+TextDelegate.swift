@@ -63,6 +63,7 @@ extension NativeTextViewCoordinator {
 
     public func textDidChange(_ notification: Notification) {
         guard let tv = notification.object as? NSTextView else { return }
+        defer { reportHostSelection(in: tv) }
         PerfTrace.checkpoint("didIn")
         let completedTextMutation = pendingEditCount == 1
             ? pendingTextMutation
@@ -379,6 +380,7 @@ extension NativeTextViewCoordinator {
 
     public func textViewDidChangeSelection(_ notification: Notification) {
         guard let tv = notification.object as? NSTextView else { return }
+        defer { reportHostSelection(in: tv) }
         // Raw mode: plain source — no reveal, snap-back, or inline previews.
         if configuration.rawSourceMode { return }
         if isWritingToolsActive, !writingToolsEditIsFinal(tv) { return }
@@ -443,11 +445,7 @@ extension NativeTextViewCoordinator {
         // pass so it can reuse it instead of walking the document's tokens
         // again, and assigned only on a CHANGE (this fires on every keystroke).
         // Cached for updateNSView, which has no tokens to hand.
-        let caretInk = caretColor(at: selRange.location, tokens: tokens, active: activeTokenIndices)
-        if caretInk != resolvedCaretColor {
-            resolvedCaretColor = caretInk
-            if tv.isEditable { tv.insertionPointColor = caretInk }
-        }
+        updateCaretColor(in: tv, at: selRange.location, tokens: tokens)
 
         // Snap-back: when the caret LEFT a wiki/image token, re-sync its displayed name to the live target name.
         if selRange.length == 0,
@@ -1017,6 +1015,11 @@ extension NativeTextViewCoordinator {
                     return true
                 }
             }
+        }
+        if let url = link as? URL,
+           (textView as? NativeTextView)?.interaction.openURL?(url) == true {
+            (textView as? NativeTextView)?.linkClickDidNavigate = true
+            return true
         }
         guard let target = WikiLinkService.resolveIdentifier(link: link, textView: textView, at: charIndex) else {
             // Web link (URL-valued): returning false lets AppKit open the URL

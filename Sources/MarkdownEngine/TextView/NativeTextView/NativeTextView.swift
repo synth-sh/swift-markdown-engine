@@ -48,6 +48,13 @@ final class NativeTextView: NSTextView {
     var minOverscrollPoints: CGFloat = MarkdownEditorConfiguration.default.overscroll.minPoints
 
     // MARK: Editor wiring
+    var interaction = EditorInteraction()
+
+    override func keyDown(with event: NSEvent) {
+        if isEditable, !hasMarkedText(), interaction.key?(self, event) == true { return }
+        super.keyDown(with: event)
+    }
+
     var onPasteImage: ((NSPasteboard) -> String?)?
     /// Files dropped onto the text (`NativeTextView+FileDrop`). Only whether one is
     /// set changes the registered drag types.

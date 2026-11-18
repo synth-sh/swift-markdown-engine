@@ -25,7 +25,10 @@ extension NativeTextViewCoordinator {
         // redundant styling on a 346k note); the necessary side effect is replayed once
         // at the end of this method.
         isRebuildingDocument = true
-        defer { isRebuildingDocument = false }
+        defer {
+            isRebuildingDocument = false
+            reportHostSelection(in: textView)
+        }
         // A rebuild means a different document (or a mode flip): drop the caret
         // ink resolved for the old one instead of carrying it into this text.
         resolvedCaretColor = nil
@@ -199,6 +202,7 @@ extension NativeTextViewCoordinator {
         // rawSourceMode / isWritingToolsActive early-returns would have.
         if let parsed = parsedForReplay, !isWritingToolsActive {
             let finalSelection = textView.selectedRange()
+            updateCaretColor(in: textView, at: finalSelection.location, tokens: parsed.tokens)
             updateAutocorrectSettings(
                 textView,
                 caretLocation: finalSelection.location,
@@ -430,18 +434,30 @@ extension NativeTextViewCoordinator {
     }
 
     func restyleParagraphs(_ paragraphs: [NSRange], in textView: NSTextView) {
+        guard !configuration.rawSourceMode else { return }
         let docText = textView.string      // one O(doc) bridge, reused below
         let parsed = parsedDocument(for: docText)
         let tokens = parsed.tokens
         let nsText = docText as NSString
+        let selection = textView.selectedRange()
         activeTokenIndices = activeTokenIndices(
             parsed: parsed,
-            selection: textView.selectedRange(),
+            selection: selection,
             in: nsText,
             suppressed: !textView.isEditable
         )
         restyleTextView(textView, paragraphCandidates: paragraphs, tokens: tokens,
                         classified: parsed.classified, blocks: parsed.blocks)
+        updateCaretColor(in: textView, at: selection.location, tokens: tokens)
+    }
+
+    func refreshRawSourceForeground(in textView: NSTextView) {
+        let foreground = configuration.theme.bodyText
+        if let storage = textView.textStorage, storage.length > 0 {
+            storage.addAttribute(.foregroundColor, value: foreground,
+                                 range: NSRange(location: 0, length: storage.length))
+        }
+        textView.typingAttributes[.foregroundColor] = foreground
     }
 
     /// Width changes cannot alter non-table Markdown styling. Reuse the

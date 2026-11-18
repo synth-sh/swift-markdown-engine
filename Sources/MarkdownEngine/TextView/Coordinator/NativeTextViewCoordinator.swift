@@ -91,8 +91,7 @@ public final class NativeTextViewCoordinator: NSObject, NSTextViewDelegate {
         return left.range
     }
 
-    /// A parked editor comes back under a new SwiftUI view: its bindings still
-    /// belong to the view that was removed, and text written there is lost.
+    /// A reused coordinator can outlive the bindings of the document it first displayed.
     func rebind(text: Binding<String>, isWikiLinkActive: Binding<Bool>) {
         _text = text
         _isWikiLinkActive = isWikiLinkActive
@@ -566,9 +565,29 @@ public final class NativeTextViewCoordinator: NSObject, NSTextViewDelegate {
     //   - +Autocorrect     — spell/grammar/quote toggles
     //   - +WritingTools    — macOS 15+ Writing Tools session
 
+    var viewportObservers: [any NSObjectProtocol] = []
+    private var hostSelectionPending = false
+
+    func reportHostSelection(in textView: NSTextView) {
+        guard !hostSelectionPending, !isRebuildingDocument,
+              let textView = textView as? NativeTextView, textView.interaction.selection != nil,
+              !textView.hasMarkedText() else { return }
+        hostSelectionPending = true
+        DispatchQueue.main.async { [weak self, weak textView] in
+            guard let self else { return }
+            self.hostSelectionPending = false
+            guard let textView, textView.delegate === self,
+                  !self.isRebuildingDocument, self.deferredNodeSwitch == nil,
+                  !textView.hasMarkedText(), let report = textView.interaction.selection else { return }
+            let code = self.parsedDocument(for: textView.string).codeTokens
+            report(textView, MarkdownDetection.isInsideCodeBlock(range: textView.selectedRange(), codeTokens: code))
+        }
+    }
+
     deinit {
         NotificationCenter.default.removeObserver(self)
         busObservers.forEach(NotificationCenter.default.removeObserver(_:))
+        viewportObservers.forEach(NotificationCenter.default.removeObserver(_:))
     }
 }
 

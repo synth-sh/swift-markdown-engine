@@ -87,7 +87,7 @@ struct MarkdownHTMLRendererTests {
         #expect(html("see https://example.com/a?b=1&c=2 now")
             == "<p>see <a href=\"https://example.com/a?b=1&amp;c=2\">https://example.com/a?b=1&amp;c=2</a> now</p>")
         #expect(html("www.example.com")
-            == "<p><a href=\"http://www.example.com\">www.example.com</a></p>")
+            == "<p><a href=\"https://www.example.com\">www.example.com</a></p>")
         #expect(html("mail me@example.com")
             == "<p>mail <a href=\"mailto:me@example.com\">me@example.com</a></p>")
     }

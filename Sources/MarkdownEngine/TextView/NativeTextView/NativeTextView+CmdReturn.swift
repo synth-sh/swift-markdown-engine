@@ -11,6 +11,8 @@ import AppKit
 
 extension NativeTextView {
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        if event.modifierFlags.contains(.command), window?.firstResponder === self, isEditable, !hasMarkedText(),
+           interaction.key?(self, event) == true { return true }
         if event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command,
            event.keyCode == 36 || event.keyCode == 76,            // Return / keypad Enter
            let coord = delegate as? NativeTextViewCoordinator,
