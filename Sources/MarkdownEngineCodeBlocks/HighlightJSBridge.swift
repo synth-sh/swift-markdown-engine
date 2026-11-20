@@ -207,7 +207,7 @@ private final class HighlightJS {
     private static let tokenizeScript = #"""
     var __markdownEngineCodeLanguages = ["python", "javascript", "typescript", "swift", "go", "rust",
       "java", "kotlin", "c", "cpp", "csharp", "objectivec", "ruby", "php", "scala", "dart", "lua",
-      "perl", "r", "julia", "groovy", "elixir", "matlab"]
+      "perl", "r", "julia", "groovy", "elixir", "matlab", "zig"]
       .map(function (name) { return hljs.getLanguage(name); })
       .filter(function (language) { return !!language; });
 
@@ -277,10 +277,13 @@ private final class HighlightJS {
     init?() {
         guard let url = Bundle.module.url(forResource: "highlight.min", withExtension: "js"),
               let source = try? String(contentsOf: url, encoding: .utf8),
+              let zigURL = Bundle.module.url(forResource: "zig", withExtension: "js"),
+              let zigGrammar = try? String(contentsOf: zigURL, encoding: .utf8),
               let context = JSContext() else {
             return nil
         }
         context.evaluateScript(source)
+        context.evaluateScript(zigGrammar)
         context.evaluateScript(Self.tokenizeScript)
         guard context.exception == nil,
               let tokenize = context.objectForKeyedSubscript("__markdownEngineTokenize"),

@@ -64,7 +64,7 @@ The package ships three library products — add only what you need:
 | Product | Use when |
 |---|---|
 | `MarkdownEngine` | You want the editor only. Zero external dependencies. |
-| `MarkdownEngineCodeBlocks` | You want the full visual code-block experience — background fill, monospace font, and syntax highlighting — without writing your own bridge. Bundles [highlight.js](https://highlightjs.org) (192 languages); no package dependencies. See [Customization → Code Blocks](#code-blocks). |
+| `MarkdownEngineCodeBlocks` | You want the full visual code-block experience — background fill, monospace font, and syntax highlighting — without writing your own bridge. Bundles [highlight.js](https://highlightjs.org) plus Zig and ZON support; no package dependencies. See [Customization → Code Blocks](#code-blocks). |
 | `MarkdownEngineLatex` | You want LaTeX formula rendering without writing your own bridge. Pulls in [SwiftMath](https://github.com/mgriebling/SwiftMath) transitively. See [Customization → LaTeX Rendering](#latex-rendering). |
 
 ## Quick Start
@@ -147,6 +147,10 @@ single theme is an init param — see DocC. In code languages the bridge
 also scopes what highlight.js leaves plain — names (`identifier`), calls,
 members (`property`), operators and punctuation — so a theme can colour
 every name the way CodeMirror-based editors do.
+
+Use `highlight(code:registeredLanguage:)` when the language name or alias
+comes from a filename. It returns `nil` for an unknown language. The bundle
+registers `zig` and `zon` for Zig source and Zig Object Notation.
 
 highlight.js is BSD-3-Clause: its licence ships in the product's
 resource bundle (`highlight.js-LICENSE.txt`), and an app distributing a
