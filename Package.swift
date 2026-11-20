@@ -33,6 +33,7 @@ let package = Package(
             resources: [
                 .copy("Resources/highlight.min.js"),
                 .copy("Resources/highlight.js-LICENSE.txt"),
+                .copy("Resources/zig.js"),
             ]
         ),
         .target(

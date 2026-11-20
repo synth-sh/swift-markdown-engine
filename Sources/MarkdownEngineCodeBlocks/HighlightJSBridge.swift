@@ -128,19 +128,28 @@ public final class HighlightJSBridge: SyntaxHighlighter, @unchecked Sendable {
     }
 
     public func highlight(code: String, language: String?) -> NSAttributedString? {
+        // The info string's first word is the language (```python title="x.py").
+        let name = language?.split(whereSeparator: \.isWhitespace).first?.lowercased() ?? ""
+        return highlight(code: code, language: name, autoDetect: true)
+    }
+
+    /// Highlights a registered language name or alias, returning `nil` for an unknown one.
+    public func highlight(code: String, registeredLanguage: String) -> NSAttributedString? {
+        highlight(code: code, language: registeredLanguage.lowercased(), autoDetect: false)
+    }
+
+    private func highlight(code: String, language: String, autoDetect: Bool) -> NSAttributedString? {
         guard let highlightJS else { return nil }
         let dark = isDarkAppearance()
         let theme = dark ? darkTheme : lightTheme
-        // The info string's first word is the language (```python title="x.py").
-        let name = language?.split(whereSeparator: \.isWhitespace).first?.lowercased() ?? ""
-        let cacheKey = "\(dark ? "dark" : "light")|\(name)|\(code)" as NSString
+        let cacheKey = "\(dark)|\(autoDetect)|\(language.utf8.count)|\(language)|\(code)" as NSString
 
         if let cached = highlightCache.object(forKey: cacheKey) {
             return cached
         }
 
         lock.lock()
-        let tokens = highlightJS.tokens(in: code, language: name)
+        let tokens = highlightJS.tokens(in: code, language: language, autoDetect: autoDetect)
         lock.unlock()
         guard let tokens else { return nil }
 
@@ -198,12 +207,14 @@ private final class HighlightJS {
     private static let tokenizeScript = #"""
     var __markdownEngineCodeLanguages = ["python", "javascript", "typescript", "swift", "go", "rust",
       "java", "kotlin", "c", "cpp", "csharp", "objectivec", "ruby", "php", "scala", "dart", "lua",
-      "perl", "r", "julia", "groovy", "elixir", "matlab"]
+      "perl", "r", "julia", "groovy", "elixir", "matlab", "zig"]
       .map(function (name) { return hljs.getLanguage(name); })
       .filter(function (language) { return !!language; });
 
-    var __markdownEngineTokenize = function (code, language) {
-      var result = language && hljs.getLanguage(language)
+    var __markdownEngineTokenize = function (code, language, autoDetect) {
+      var registered = language && hljs.getLanguage(language);
+      if (!registered && !autoDetect) { return null; }
+      var result = registered
         ? hljs.highlight(code, { language: language, ignoreIllegals: true })
         : hljs.highlightAuto(code);
       var root = result._emitter && result._emitter.rootNode;
@@ -266,10 +277,13 @@ private final class HighlightJS {
     init?() {
         guard let url = Bundle.module.url(forResource: "highlight.min", withExtension: "js"),
               let source = try? String(contentsOf: url, encoding: .utf8),
+              let zigURL = Bundle.module.url(forResource: "zig", withExtension: "js"),
+              let zigGrammar = try? String(contentsOf: zigURL, encoding: .utf8),
               let context = JSContext() else {
             return nil
         }
         context.evaluateScript(source)
+        context.evaluateScript(zigGrammar)
         context.evaluateScript(Self.tokenizeScript)
         guard context.exception == nil,
               let tokenize = context.objectForKeyedSubscript("__markdownEngineTokenize"),
@@ -281,9 +295,9 @@ private final class HighlightJS {
     }
 
     /// Scoped runs of `code`, or `nil` when highlight.js failed. Text outside every scope is left out.
-    func tokens(in code: String, language: String) -> [Token]? {
+    func tokens(in code: String, language: String, autoDetect: Bool) -> [Token]? {
         context.exception = nil
-        let value = tokenize.call(withArguments: [code, language])
+        let value = tokenize.call(withArguments: [code, language, autoDetect])
         guard context.exception == nil,
               let value, value.isString,
               let data = value.toString().data(using: .utf8),

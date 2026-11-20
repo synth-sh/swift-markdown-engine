@@ -35,6 +35,7 @@ struct HighlightJSBridgeTests {
             "title": title,
             "title.function": function,
             "title.class": type,
+            "type": type,
             "identifier": identifier,
             "property": property,
             "punctuation": punctuation,
@@ -98,6 +99,40 @@ struct HighlightJSBridgeTests {
     @Test("The language resolves like a fence's info string", arguments: ["py", "PYTHON", #"python title="x.py""#])
     func languageLabels(label: String) throws {
         #expect(try color(of: "def", in: "def f(): pass", language: label) == Self.keyword)
+    }
+
+    @Test func registeredLanguageOnly() throws {
+        let code = "public class Example { private int number = 42; }"
+        let csharp = try #require(Self.bridge.highlight(code: code, registeredLanguage: "csharp"))
+        let alias = try #require(Self.bridge.highlight(code: code, registeredLanguage: "CS"))
+        #expect(alias == csharp)
+        #expect(alias.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? NSColor == Self.keyword)
+
+        let unknown = "unknown-file-type"
+        #expect(Self.bridge.highlight(code: code, language: unknown) != nil)
+        #expect(Self.bridge.highlight(code: code, registeredLanguage: unknown) == nil)
+    }
+
+    @Test func registeredZig() throws {
+        let declaration = "pub fn main() !void {"
+        let highlighted = try #require(Self.bridge.highlight(code: declaration, registeredLanguage: "zig"))
+        #expect(highlighted == Self.bridge.highlight(code: declaration, language: "zig"))
+        #expect(try color(of: "fn", in: declaration, language: "zig") == Self.keyword)
+        #expect(try color(of: "main", in: declaration, language: "zig") == Self.function)
+        #expect(try color(of: "void", in: declaration, language: "zig") == Self.type)
+        #expect(try color(of: "@import", in: #"const std = @import("std");"#, language: "zig") == Self.builtIn)
+        #expect(try color(of: "u7", in: "const flags: u7 = 0b10_1100;", language: "zig") == Self.type)
+        #expect(try color(of: "0x1.ffp+2", in: "const value = 0x1.ffp+2;", language: "zig") == Self.number)
+        #expect(try color(of: "// Notes", in: "    // Notes", language: "zig") == Self.comment)
+        #expect(try color(of: "a raw line", in: #"    \\a raw line"#, language: "zig") == Self.string)
+    }
+
+    @Test func registeredZon() throws {
+        let code = #".{ .name = .synth, .version = "0.2.0", .fingerprint = 0xff_ff }"#
+        let highlighted = try #require(Self.bridge.highlight(code: code, registeredLanguage: "zon"))
+        #expect(highlighted == Self.bridge.highlight(code: code, registeredLanguage: "zig"))
+        #expect(try color(of: #""0.2.0""#, in: code, language: "zon") == Self.string)
+        #expect(try color(of: "0xff_ff", in: code, language: "zon") == Self.number)
     }
 
     @Test("Plain code is lexed into names, calls, members and operators")
