@@ -100,6 +100,18 @@ struct HighlightJSBridgeTests {
         #expect(try color(of: "def", in: "def f(): pass", language: label) == Self.keyword)
     }
 
+    @Test func registeredLanguageOnly() throws {
+        let code = "public class Example { private int number = 42; }"
+        let csharp = try #require(Self.bridge.highlight(code: code, registeredLanguage: "csharp"))
+        let alias = try #require(Self.bridge.highlight(code: code, registeredLanguage: "CS"))
+        #expect(alias == csharp)
+        #expect(alias.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? NSColor == Self.keyword)
+
+        let unknown = "unknown-file-type"
+        #expect(Self.bridge.highlight(code: code, language: unknown) != nil)
+        #expect(Self.bridge.highlight(code: code, registeredLanguage: unknown) == nil)
+    }
+
     @Test("Plain code is lexed into names, calls, members and operators")
     func plainCode() throws {
         let python = """
